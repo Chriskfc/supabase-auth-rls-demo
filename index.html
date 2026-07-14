@@ -460,17 +460,17 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 
 /* ---------------------------------------------------------------------------
-   These two values are public by design. The anon key is safe to publish
-   BECAUSE row level security is enforced on every table that matters.
-   The service_role key is the one that must never appear here — it bypasses
-   every policy on this page.
+   These two values are public by design. The publishable key (what Supabase
+   used to call the anon key) is safe to publish BECAUSE row level security is
+   enforced on every table that matters. The secret key — formerly service_role —
+   is the one that must never appear here: it bypasses every policy on this page.
 --------------------------------------------------------------------------- */
-const SUPABASE_URL      = '__SUPABASE_URL__';
-const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+const SUPABASE_URL = 'https://yjzazouuvyalxuaraeya.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_fN4GL0z0Cyvi3RjLBX1ZwA_chythxDJ';
 
 const TOTAL_QUOTES = 12;   // what the seed data actually put in the table
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const $ = (id) => document.getElementById(id);
 const money = (c) => '$' + (c / 100).toLocaleString('en-AU', { minimumFractionDigits: 2 });
