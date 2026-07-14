@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Row Level Security — live demonstration</title>
+<meta name="description" content="A working Supabase Auth + Row Level Security demo. Two logins, one query, different rows — enforced by the database, not the browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:      #16181d;
+    --ink-soft: #3d434e;
+    --steel:    #6b7482;
+    --concrete: #e8e6e1;
+    --paper:    #f6f5f2;
+    --line:     #cfccc4;
+    --hivis:    #f0a202;
+    --permit:   #0f6d5f;
+    --alarm:    #b8342a;
+
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--concrete);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---- stamped label, the recurring structural device ------------------- */
+  .stamp {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--steel);
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---- header ----------------------------------------------------------- */
+  header {
+    border-bottom: 1px solid var(--line);
+    background: var(--paper);
+  }
+  .head-inner {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 20px;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 22px 0;
+  }
+  h1 {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+  }
+  h1 span { color: var(--hivis); }
+  .head-note { font-size: 13px; color: var(--ink-soft); max-width: 46ch; }
+
+  /* ---- session bar ------------------------------------------------------ */
+  .session {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .who {
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .role-chip {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border: 1px solid currentColor;
+    margin-left: 6px;
+  }
+  .role-chip.rep   { color: var(--ink-soft); }
+  .role-chip.admin { color: var(--permit); }
+
+  /* ---- buttons ---------------------------------------------------------- */
+  button {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+    cursor: pointer;
+    transition: background 120ms ease, color 120ms ease;
+  }
+  button:hover:not(:disabled) { background: var(--hivis); border-color: var(--hivis); color: var(--ink); }
+  button:focus-visible { outline: 3px solid var(--hivis); outline-offset: 2px; }
+  button:disabled { opacity: 0.45; cursor: default; }
+  button.ghost { background: transparent; color: var(--ink); }
+  button.ghost:hover:not(:disabled) { background: var(--ink); color: var(--paper); }
+
+  /* ---- login ------------------------------------------------------------ */
+  .login {
+    padding: 64px 0 72px;
+    max-width: 620px;
+  }
+  .login h2 {
+    font-family: var(--mono);
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    margin: 14px 0 14px;
+  }
+  .login p { color: var(--ink-soft); margin-bottom: 26px; }
+  .login-choices { display: flex; flex-wrap: wrap; gap: 12px; }
+  .cred {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--steel);
+    margin-top: 18px;
+  }
+
+  /* ---- two-column body -------------------------------------------------- */
+  .columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .col { padding: 28px 0 40px; }
+  .col.app  { padding-right: 32px; border-right: 1px solid var(--line); }
+  .col.wire { padding-left: 32px; }
+
+  .col-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 6px; }
+  .col-title { font-family: var(--mono); font-size: 13px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .col-sub { font-size: 13px; color: var(--ink-soft); margin-bottom: 22px; }
+
+  /* ---- quote rows ------------------------------------------------------- */
+  .quote {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 16px;
+    padding: 12px 0;
+    border-top: 1px solid var(--line);
+  }
+  .quote-title { font-weight: 500; }
+  .quote-meta { font-family: var(--mono); font-size: 12px; color: var(--steel); grid-column: 1; }
+  .quote-amt { font-family: var(--mono); font-weight: 600; text-align: right; grid-row: 1 / span 2; align-self: center; }
+  .status {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .status.won   { color: var(--permit); }
+  .status.lost  { color: var(--alarm); }
+  .status.sent  { color: var(--hivis); }
+  .status.draft { color: var(--steel); }
+
+  .items { margin: 6px 0 0 0; padding-left: 14px; border-left: 2px solid var(--line); }
+  .item { font-family: var(--mono); font-size: 12px; color: var(--steel); }
+
+  /* ---- ledger: the signature element ------------------------------------ */
+  .ledger { margin-top: 4px; }
+  .slot {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    margin-bottom: 3px;
+    font-family: var(--mono);
+    font-size: 12px;
+    border-left: 3px solid transparent;
+  }
+  .slot .n { color: var(--steel); min-width: 22px; }
+  .slot.recv {
+    background: var(--paper);
+    border-left-color: var(--permit);
+  }
+  .slot.recv .label { color: var(--ink); }
+  .slot.blocked {
+    background: repeating-linear-gradient(
+      -45deg,
+      rgba(240,162,2,0.13) 0 8px,
+      rgba(240,162,2,0.04) 8px 16px
+    );
+    border-left-color: var(--hivis);
+    color: var(--steel);
+  }
+  .slot .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slot .tag { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .slot.recv .tag    { color: var(--permit); }
+  .slot.blocked .tag { color: #a37000; }
+
+  .tally {
+    display: flex;
+    gap: 26px;
+    margin: 18px 0 10px;
+    padding: 14px 0;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+  }
+  .tally div { font-family: var(--mono); }
+  .tally .num { font-size: 26px; font-weight: 600; line-height: 1.1; }
+  .tally .num.recv { color: var(--permit); }
+  .tally .num.held { color: #a37000; }
+  .tally .cap { font-size: 10px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--steel); }
+
+  /* ---- code blocks ------------------------------------------------------ */
+  pre {
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.6;
+    background: var(--ink);
+    color: #dfe3e8;
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin-bottom: 6px;
+  }
+  pre .k { color: var(--hivis); }
+  pre .c { color: #7b8592; }
+
+  .caption { font-size: 13px; color: var(--ink-soft); margin: 10px 0 22px; }
+
+  /* ---- write tests ------------------------------------------------------ */
+  .tests { padding: 34px 0 40px; border-bottom: 1px solid var(--line); }
+  .test-row { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0 14px; }
+  .result {
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 12px 14px;
+    border-left: 3px solid var(--steel);
+    background: var(--paper);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .result.ok   { border-left-color: var(--permit); }
+  .result.deny { border-left-color: var(--alarm); color: var(--alarm); }
+  .result:empty { display: none; }
+
+  /* ---- the cautionary strip --------------------------------------------- */
+  .danger {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 40px 0 46px;
+  }
+  .danger .stamp { color: var(--hivis); }
+  .danger h3 {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 600;
+    margin: 10px 0 12px;
+  }
+  .danger p { color: #b3bac4; max-width: 62ch; margin-bottom: 22px; }
+  .leak { border-top: 1px solid #2c313a; }
+  .leak-row {
+    display: flex;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid #2c313a;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--alarm);
+  }
+  .leak-row .n { color: #5a616b; }
+
+  footer { padding: 30px 0 50px; }
+  footer p { font-size: 13px; color: var(--steel); max-width: 70ch; }
+  footer a { color: var(--ink); }
+
+  .hidden { display: none !important; }
+
+  @media (max-width: 860px) {
+    .columns { grid-template-columns: 1fr; }
+    .col.app  { padding-right: 0; border-right: 0; border-bottom: 1px solid var(--line); }
+    .col.wire { padding-left: 0; }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .slot, .quote { animation: settle 260ms ease both; }
+    @keyframes settle {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: none; }
+    }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap head-inner">
+    <div>
+      <div class="stamp">Supabase · Auth + Row Level Security</div>
+      <h1>What arrived, and what <span>never left the database</span></h1>
+    </div>
+    <p class="head-note">
+      One HTML file. One query. Two staff logins that get different rows back —
+      because the database decides, not the browser.
+    </p>
+  </div>
+</header>
+
+<!-- ===================== SIGNED OUT ===================== -->
+<section id="login" class="wrap login">
+  <div class="stamp">Choose a seat</div>
+  <h2>Sign in as a sales rep, then sign in as the operations admin, and watch the same query return different data.</h2>
+  <p>
+    Both accounts were created by hand. Public signup is switched off on this project,
+    exactly as it is on a real internal tool.
+  </p>
+  <div class="login-choices">
+    <button id="as-rep">Sign in as Sam — sales rep</button>
+    <button id="as-admin" class="ghost">Sign in as Dana — operations</button>
+  </div>
+  <p class="cred">rep@demo.test · admin@demo.test — passwords are in the README, this is a public demo.</p>
+  <div id="login-error" class="result deny" style="margin-top:18px"></div>
+</section>
+
+<!-- ===================== SIGNED IN ===================== -->
+<div id="app" class="hidden">
+
+  <div class="wrap session">
+    <span class="who" id="who"></span>
+    <span style="flex:1"></span>
+    <button id="signout" class="ghost">Sign out</button>
+  </div>
+
+  <div class="wrap columns">
+
+    <!-- ---------- left: the app ---------- -->
+    <div class="col app">
+      <div class="col-head">
+        <span class="col-title">The app</span>
+        <span class="stamp">what staff see</span>
+      </div>
+      <p class="col-sub">The quotes this account is allowed to work with.</p>
+      <div id="quotes"></div>
+
+      <div style="margin-top:32px">
+        <div class="col-head">
+          <span class="col-title">Customers</span>
+          <span class="stamp">shared by everyone</span>
+        </div>
+        <p class="col-sub">Every staff member reads the same list. Only operations can change it.</p>
+        <div id="customers"></div>
+      </div>
+
+      <div style="margin-top:32px">
+        <div class="col-head">
+          <span class="col-title">Activity log</span>
+          <span class="stamp">write-only for reps</span>
+        </div>
+        <p class="col-sub" id="log-sub"></p>
+        <div id="activity"></div>
+      </div>
+    </div>
+
+    <!-- ---------- right: the wire ---------- -->
+    <div class="col wire">
+      <div class="col-head">
+        <span class="col-title">The wire</span>
+        <span class="stamp">what the database sent</span>
+      </div>
+      <p class="col-sub">The query below is identical for both accounts. It is the only line of data-fetching code in this file.</p>
+
+<pre><span class="k">await</span> supabase
+  .from(<span class="k">'quotes'</span>)
+  .select(<span class="k">'*, customers(name), quote_items(*)'</span>)
+  .order(<span class="k">'created_at'</span>)</pre>
+      <p class="caption">No filter. No <code>where owner_id = …</code>. Nothing in the front end decides who sees what.</p>
+
+      <div class="tally">
+        <div><div class="num">12</div><div class="cap">rows in table</div></div>
+        <div><div class="num recv" id="t-recv">0</div><div class="cap">sent to you</div></div>
+        <div><div class="num held" id="t-held">0</div><div class="cap">withheld</div></div>
+      </div>
+
+      <div class="ledger" id="ledger"></div>
+      <p class="caption" id="ledger-note"></p>
+
+      <div class="col-head" style="margin-top:26px">
+        <span class="col-title">The policy doing it</span>
+      </div>
+<pre><span class="c">-- runs inside Postgres, on every single query</span>
+<span class="k">create policy</span> "quotes: rep reads own, admin reads all"
+  <span class="k">on</span> public.quotes <span class="k">for select</span>
+  <span class="k">to</span> authenticated
+  <span class="k">using</span> (owner_id = auth.uid() <span class="k">or</span> public.is_admin());</pre>
+      <p class="caption">
+        Withheld rows are not hidden, greyed out, or filtered in JavaScript. They were never put on the wire.
+        Open the network tab and look — they are not in the response.
+      </p>
+    </div>
+  </div>
+
+  <!-- ---------- write tests ---------- -->
+  <section class="wrap tests">
+    <div class="col-head">
+      <span class="col-title">Writes are checked too</span>
+      <span class="stamp">using vs with check</span>
+    </div>
+    <p class="col-sub" style="max-width:70ch">
+      Reading is only half of it. The activity log accepts an entry from any staff member —
+      but only in their own name. The second button tries to write an entry as Dana. The database refuses it,
+      and the raw error is printed exactly as it comes back.
+    </p>
+    <div class="test-row">
+      <button id="log-self">Log an action as yourself</button>
+      <button id="log-spoof" class="ghost">Try to log an action as Dana</button>
+    </div>
+    <div id="test-result" class="result"></div>
+  </section>
+
+</div>
+
+<!-- ===================== THE CAUTIONARY STRIP ===================== -->
+<section class="danger">
+  <div class="wrap">
+    <div class="stamp">Table with row level security switched off</div>
+    <h3>You are not signed in to this part. You are reading it anyway.</h3>
+    <p>
+      The key this page uses is public — it ships inside the HTML, and it is meant to.
+      Row level security is what makes that safe. This one table was left without it, and so
+      anybody who opens the page, signed in or not, gets every row. This is the accident the policies above prevent.
+    </p>
+    <div class="leak" id="leak"></div>
+  </div>
+</section>
+
+<footer class="wrap">
+  <p>
+    Built as a working reference: single-file HTML, Supabase Auth, five tables under row level security,
+    public signup disabled, staff accounts created by hand. Schema and policies are in
+    <a href="https://github.com/Chriskfc/supabase-auth-rls-demo">the repository</a>. All data is fictional.
+  </p>
+</footer>
+
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+/* ---------------------------------------------------------------------------
+   These two values are public by design. The anon key is safe to publish
+   BECAUSE row level security is enforced on every table that matters.
+   The service_role key is the one that must never appear here — it bypasses
+   every policy on this page.
+--------------------------------------------------------------------------- */
+const SUPABASE_URL      = '__SUPABASE_URL__';
+const SUPABASE_ANON_KEY = '__SUPABASE_ANON_KEY__';
+
+const TOTAL_QUOTES = 12;   // what the seed data actually put in the table
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const $ = (id) => document.getElementById(id);
+const money = (c) => '$' + (c / 100).toLocaleString('en-AU', { minimumFractionDigits: 2 });
+const esc = (s) => String(s).replace(/[&<>"]/g, (m) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[m]));
+
+let session = null;
+let profile = null;
+
+/* ---- the unprotected table: fetched with no session at all -------------- */
+async function showLeak() {
+  const { data } = await supabase.from('unprotected_demo').select('*').order('id');
+  $('leak').innerHTML = (data ?? [])
+    .map((r, i) => `<div class="leak-row"><span class="n">${String(i + 1).padStart(2, '0')}</span><span>${esc(r.secret_note)}</span></div>`)
+    .join('');
+}
+
+async function signIn(email, password) {
+  $('login-error').textContent = '';
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) {
+    $('login-error').textContent = error.message;
+    return;
+  }
+  await load();
+}
+
+async function load() {
+  const { data: { session: s } } = await supabase.auth.getSession();
+  session = s;
+  if (!session) return signedOut();
+
+  const { data: p } = await supabase.from('profiles').select('*').eq('id', session.user.id).single();
+  profile = p;
+
+  $('login').classList.add('hidden');
+  $('app').classList.remove('hidden');
+  $('who').innerHTML =
+    `${esc(profile.full_name)}<span class="role-chip ${profile.role}">${profile.role}</span>`;
+
+  // ---- the one query. identical for both accounts. ----
+  const { data: quotes } = await supabase
+    .from('quotes')
+    .select('*, customers(name), quote_items(*)')
+    .order('created_at');
+
+  renderQuotes(quotes ?? []);
+  renderLedger(quotes ?? []);
+
+  const { data: customers } = await supabase.from('customers').select('*').order('id');
+  $('customers').innerHTML = (customers ?? [])
+    .map((c) => `<div class="quote"><div><div class="quote-title">${esc(c.name)}</div><div class="quote-meta">${esc(c.suburb)}</div></div></div>`)
+    .join('');
+
+  const { data: log } = await supabase.from('activity_log').select('*').order('created_at', { ascending: false });
+  renderActivity(log ?? []);
+}
+
+function renderQuotes(quotes) {
+  $('quotes').innerHTML = quotes.map((q) => `
+    <div class="quote">
+      <div>
+        <div class="quote-title">${esc(q.title)}</div>
+        <div class="quote-meta">${esc(q.customers?.name ?? '—')} · <span class="status ${q.status}">${q.status}</span></div>
+        ${(q.quote_items ?? []).length
+          ? `<div class="items">${q.quote_items.map((i) => `<div class="item">${esc(i.description)} — ${money(i.amount_cents)}</div>`).join('')}</div>`
+          : ''}
+      </div>
+      <div class="quote-amt">${money(q.amount_cents)}</div>
+    </div>`).join('');
+}
+
+function renderLedger(quotes) {
+  const received = quotes.length;
+  const withheld = Math.max(TOTAL_QUOTES - received, 0);
+
+  $('t-recv').textContent = received;
+  $('t-held').textContent = withheld;
+
+  const slots = quotes.map((q, i) => `
+    <div class="slot recv">
+      <span class="n">${String(i + 1).padStart(2, '0')}</span>
+      <span class="label">${esc(q.title)}</span>
+      <span class="tag">received</span>
+    </div>`);
+
+  for (let i = 0; i < withheld; i++) {
+    slots.push(`
+      <div class="slot blocked">
+        <span class="n">${String(received + i + 1).padStart(2, '0')}</span>
+        <span class="label">— not transmitted —</span>
+        <span class="tag">withheld</span>
+      </div>`);
+  }
+
+  $('ledger').innerHTML = slots.join('');
+  $('ledger-note').textContent = withheld === 0
+    ? 'Every row in the table reached this browser, because the policy says operations may read all of them.'
+    : `The withheld rows are blank here because this browser genuinely does not have them. Nothing was hidden after the fact — ${withheld} of the ${TOTAL_QUOTES} rows were never sent.`;
+}
+
+function renderActivity(log) {
+  if (profile.role === 'admin') {
+    $('log-sub').textContent = 'Operations can read the log. Reps can write to it but not read it.';
+    $('activity').innerHTML = log.length
+      ? log.map((r) => `<div class="quote"><div><div class="quote-title">${esc(r.action)}</div><div class="quote-meta">${new Date(r.created_at).toLocaleString('en-AU')}</div></div></div>`).join('')
+      : '<p class="caption">No entries yet.</p>';
+  } else {
+    $('log-sub').textContent = 'Sam can add entries to the log but cannot read it back.';
+    $('activity').innerHTML =
+      '<div class="result">0 rows returned — and no error. There is no read policy for reps on this table, so the log is simply empty from here.</div>';
+  }
+}
+
+/* ---- write tests --------------------------------------------------------- */
+async function logSelf() {
+  const box = $('test-result');
+  const { error } = await supabase
+    .from('activity_log')
+    .insert({ actor_id: session.user.id, action: `${profile.full_name} opened the demo` });
+
+  if (error) {
+    box.className = 'result deny';
+    box.textContent = `Refused:\n${error.message}`;
+  } else {
+    box.className = 'result ok';
+    box.textContent = 'Accepted. The row was written with your own id, which is what the policy requires.';
+    if (profile.role === 'admin') await load();
+  }
+}
+
+async function logSpoof() {
+  const box = $('test-result');
+  // A deliberately wrong actor_id: not the signed-in user.
+  const notYou = '00000000-0000-0000-0000-000000000000';
+  const { error } = await supabase
+    .from('activity_log')
+    .insert({ actor_id: notYou, action: 'Entry written in somebody else’s name' });
+
+  if (error) {
+    box.className = 'result deny';
+    box.textContent = `Refused by the database:\n${error.message}\n\nThe WITH CHECK clause requires actor_id = auth.uid(). The front end asked anyway. It got nowhere.`;
+  } else {
+    box.className = 'result deny';
+    box.textContent = 'Unexpected: the write succeeded. That would mean the policy is wrong.';
+  }
+}
+
+function signedOut() {
+  $('app').classList.add('hidden');
+  $('login').classList.remove('hidden');
+  $('test-result').textContent = '';
+  $('test-result').className = 'result';
+}
+
+$('as-rep').onclick    = () => signIn('rep@demo.test',   'demo-rep-2026');
+$('as-admin').onclick  = () => signIn('admin@demo.test', 'demo-admin-2026');
+$('signout').onclick   = async () => { await supabase.auth.signOut(); signedOut(); };
+$('log-self').onclick  = logSelf;
+$('log-spoof').onclick = logSpoof;
+
+showLeak();
+load();
+</script>
+</body>
+</html>
