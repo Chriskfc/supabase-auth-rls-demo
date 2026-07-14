@@ -165,7 +165,15 @@
   }
   .quote-title { font-weight: 500; }
   .quote-meta { font-family: var(--mono); font-size: 12px; color: var(--steel); grid-column: 1; }
-  .quote-amt { font-family: var(--mono); font-weight: 600; text-align: right; grid-row: 1 / span 2; align-self: center; }
+  .quote-amt {
+    font-family: var(--mono);
+    font-weight: 600;
+    text-align: right;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    white-space: nowrap;
+  }
   .status {
     font-family: var(--mono);
     font-size: 10px;
