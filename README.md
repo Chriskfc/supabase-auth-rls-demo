@@ -1,6 +1,6 @@
 # Supabase Auth + Row Level Security — a working demonstration
 
-**Live demo:** _(link goes here once Pages is up)_
+**Live demo:** https://chriskfc.github.io/supabase-auth-rls-demo/
 
 A single HTML file, a free Supabase project, five tables under row level security, and two staff logins.
 Sign in as the sales rep, then sign in as the operations admin. **The same query returns different rows.**
